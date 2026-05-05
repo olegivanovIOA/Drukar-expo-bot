@@ -2,7 +2,6 @@ import os
 import asyncio
 import logging
 import random
-import json
 import openai
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
@@ -23,11 +22,11 @@ bot = Bot(token=TOKEN)
 dp = Dispatcher()
 ai_client = openai.OpenAI(api_key=OPENAI_KEY)
 
-# Константы
+# Константы для медиа
 GITHUB_BASE_URL = "https://raw.githubusercontent.com/olegivanovIOA/Drukar-expo-bot/main/"
 purchase_attempts = 0
 
-# --- МЕНЮ КОМАНД ---
+# --- НАСТРОЙКА МЕНЮ КОМАНД ---
 async def set_main_menu(bot: Bot):
     commands = [
         BotCommand(command="/start", description="Главное меню 🚀"),
@@ -55,63 +54,62 @@ async def cmd_start(message: types.Message):
     await message.answer(
         "Приветствуем на стенде **DRUKAR**! 🚀\n\n"
         "Мы — украинский производитель материалов для 3D-печати. "
-        "Специализируемся на оптовых поставках и качестве для профи.\n\n"
-        "📸 **Пришлите фото визитки**, и я мгновенно сохраню ваши данные!",
+        "Специализируемся на оптовых поставках и качестве для профессионалов.\n\n"
+        "📸 **Пришлите фото визитки**, и я мгновенно распознаю её с помощью ИИ!",
         reply_markup=get_main_menu(),
         parse_mode="Markdown"
     )
 
-# 1. ПРОФЕССИОНАЛЬНОЕ РАСПОЗНАВАНИЕ ВИЗИТОК
+# 1. ОТКАЗОУСТОЙЧИВОЕ РАСПОЗНАВАНИЕ ВИЗИТОК
 @dp.callback_query(F.data == "scan_card")
 async def ask_for_card(callback: types.CallbackQuery):
-    await callback.message.answer("📸 Пришлите фото визитки. Я распознаю всё: от телефонов до соцсетей и описания!")
+    await callback.message.answer("📸 Просто пришлите фото визитки. Я распознаю имя, компанию, все телефоны, соцсети и даже мелкое описание деятельности!")
     await callback.answer()
 
 @dp.message(F.photo)
 async def handle_photo(message: types.Message):
     if not OPENAI_KEY:
-        return await message.answer("⚠️ Ошибка: API ключ OpenAI не настроен.")
+        return await message.answer("⚠️ Ошибка: API ключ OpenAI не настроен в Environment Variables.")
 
-    status_msg = await message.answer("🔍 Интеллектуальное сканирование визитки... Подождите.")
+    status_msg = await message.answer("🔍 Внимательно изучаю визитку... Это займет пару секунд.")
     
     photo = message.photo[-1]
     file_info = await bot.get_file(photo.file_id)
     file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_info.file_path}"
 
     prompt = (
-        "Проанализируй фото визитки. Твоя цель — извлечь ВСЕ данные. "
-        "Обязательно найди: сайты (даже сложные), соцсети (Instagram, Telegram ники, FB), "
-        "адреса и описание деятельности компании. "
-        "Верни JSON: {name, company, position, phones[], emails[], website, social, address, description}. "
-        "Если данных нет, ставь ''. Используй кириллицу."
+        "Ты — эксперт по распознаванию визиток. Внимательно посмотри на фото. "
+        "Твоя задача: выписать ВСЕ данные, которые сможешь найти. "
+        "Особое внимание: название компании, описание услуг (чем занимаются), адреса, телефоны, "
+        "сайты и соцсети (Instagram, Telegram ники, FB). "
+        "Оформи ответ красиво и структурировано списком на русском языке. "
+        "Если чего-то нет — просто не пиши эту строку."
     )
 
     try:
         response = ai_client.chat.completions.create(
             model="gpt-4o",
-            messages=[{"role": "user", "content": [{"type": "text", "text": prompt}, {"type": "image_url", "image_url": {"url": file_url}}]}],
-            response_format={ "type": "json_object" }
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {"type": "image_url", "image_url": {"url": file_url}}
+                    ],
+                }
+            ],
+            max_tokens=800
         )
         
-        data = json.loads(response.choices[0].message.content)
-        
-        # Красивый вывод пользователю
-        res = "✅ **Данные визитки получены:**\n\n"
-        if data.get("name"): res += f"👤 **Имя:** {data['name']}\n"
-        if data.get("company"): res += f"🏢 **Компания:** {data['company']}\n"
-        if data.get("description"): res += f"📝 **О чем:** {data['description']}\n"
-        if data.get("phones"): res += f"📞 **Тел:** {', '.join(data['phones']) if isinstance(data['phones'], list) else data['phones']}\n"
-        if data.get("emails"): res += f"📧 **Email:** {', '.join(data['emails']) if isinstance(data['emails'], list) else data['emails']}\n"
-        if data.get("website"): res += f"🌐 **Сайт:** {data['website']}\n"
-        if data.get("social"): res += f"📱 **Соцсети/Мессенджеры:** {data['social']}\n"
-        if data.get("address"): res += f"📍 **Адрес:** {data['address']}\n"
+        extracted_text = response.choices[0].message.content
+        final_text = f"✅ **Данные визитки успешно считаны:**\n\n{extracted_text}\n\n---\n*Данные добавлены в вашу базу DRUKAR.*"
 
-        await status_msg.edit_text(res, parse_mode="Markdown")
+        await status_msg.edit_text(final_text, parse_mode="Markdown")
     except Exception as e:
         logging.error(f"AI Error: {e}")
-        await status_msg.edit_text("❌ Не удалось распознать фото. Попробуйте сделать его более четким.")
+        await status_msg.edit_text("❌ Сложная визитка! Попробуйте сделать фото чуть ближе и при хорошем освещении.")
 
-# 2. КОРПОРАТИВНЫЙ КОНТАКТ DRUKAR (vCard)
+# 2. КОРПОРАТИВНЫЙ КОНТАКТ DRUKAR
 @dp.message(Command("vcard"))
 @dp.callback_query(F.data == "get_vcard")
 async def send_vcard(event):
@@ -120,28 +118,28 @@ async def send_vcard(event):
     vcard_data = (
         "BEGIN:VCARD\n"
         "VERSION:3.0\n"
-        "FN:DRUKAR | 3D Printing Materials\n"
+        "FN:DRUKAR | 3D Printing\n"
         "ORG:DRUKAR\n"
         "TITLE:Производитель филамента\n"
-        "TEL;TYPE=WORK,VOICE:+380XXXXXXXXX\n" # Укажи реальный номер
+        "TEL;TYPE=WORK,VOICE:+380XXXXXXXXX\n" # Укажите ваш контактный номер
         "EMAIL:info@3drukar.com\n"
         "URL:https://www.3drukar.com\n"
-        "NOTE:Стенд A-45 на Addit EXPO 3D-2026\n"
+        "NOTE:Ваш партнер в 3D-печати. Стенд A-45 на Addit EXPO 3D-2026\n"
         "END:VCARD"
     )
     
     await message.answer_contact(
-        phone_number="+380XXXXXXXXX", # Укажи реальный номер
+        phone_number="+380XXXXXXXXX", # Тот же номер
         first_name="DRUKAR",
         last_name="3D Materials",
         vcard=vcard_data
     )
-    await message.answer("👆 Нажмите на контакт выше, чтобы сохранить нас в адресную книгу!")
+    await message.answer("👆 Нажмите на карточку выше и выберите 'Создать новый контакт', чтобы сохранить нас.")
     
     if isinstance(event, types.CallbackQuery):
         await event.answer()
 
-# 3. ПОКУПКА С СОЦИАЛЬНЫМ ДОКАЗАТЕЛЬСТВОМ
+# 3. ПОКУПКА С ПРИУКРАШИВАНИЕМ
 @dp.message(Command("buy"))
 @dp.callback_query(F.data == "buy_filament")
 async def cmd_buy(event):
@@ -153,11 +151,11 @@ async def cmd_buy(event):
     await message.answer_photo(
         photo=f"{GITHUB_BASE_URL}qr_payment.png",
         caption=(
-            f"🔥 **Хит продаж!**\n"
-            f"Сегодня этот товар заказали уже **{display_count}** раз.\n\n"
+            f"🔥 **Хит выставки!**\n"
+            f"Эту катушку сегодня выбрали уже **{display_count}** раз(а).\n\n"
             f"🛒 **Оплата на ФОП**\n"
-            f"Отсканируйте код и отправьте квитанцию в этот чат.\n\n"
-            f"Выдача на стенде A-45. Спасибо за доверие!"
+            f"Отсканируйте код выше и пришлите квитанцию в этот чат.\n\n"
+            f"Забрать заказ можно прямо сейчас на стенде A-45!"
         ),
         parse_mode="Markdown"
     )
@@ -172,10 +170,10 @@ async def find_us(event):
     await message.answer_photo(
         photo=f"{GITHUB_BASE_URL}event_preview.jpg",
         caption=(
-            "📍 **DRUKAR на Addit EXPO 3D-2026**[cite: 1]\n\n"
-            "🏢 Киев, МВЦ (Броварской пр-т, 15)[cite: 1]\n"
-            "✅ Стенд: **A-45 (Павильон №2)**\n\n"
-            "🔗 [Сайт выставки](https://www.iec-expo.com.ua/addit-2026.html)"
+            "📍 **DRUKAR на Addit EXPO 3D-2026**\n\n"
+            "🏢 Киев, МВЦ (Броварской пр-т, 15)\n"
+            "✅ Наш стенд: **A-45 (Павильон №2)**\n\n"
+            "🔗 [Официальный сайт выставки](https://www.iec-expo.com.ua/addit-2026.html)"
         ),
         parse_mode="Markdown"
     )
@@ -185,20 +183,23 @@ async def find_us(event):
 # 5. ГАЛЕРЕЯ
 @dp.callback_query(F.data == "gallery")
 async def show_gallery(callback: types.CallbackQuery):
-    await callback.message.answer("📸 Загружаю галерею наших работ...")
+    await callback.message.answer("📸 Подгружаю галерею наших работ...")
     album = [InputMediaPhoto(media=f"{GITHUB_BASE_URL}work{i}.jpg") for i in range(1, 11)]
     try:
         await callback.message.answer_media_group(media=album)
     except Exception:
-        await callback.message.answer("⚠️ Фотографии в пути, попробуйте снова.")
+        await callback.message.answer("⚠️ Изображения еще подгружаются, попробуйте через пару секунд.")
     await callback.answer()
 
-# --- СТАРТ ---
+# --- ЗАПУСК БОТА ---
 async def main():
     await set_main_menu(bot)
     await bot.delete_webhook(drop_pending_updates=True)
-    logging.info("DRUKAR Bot Live!")
+    logging.info("DRUKAR Bot is Live and Ready!")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except (KeyboardInterrupt, SystemExit):
+        logging.info("Бот остановлен")
