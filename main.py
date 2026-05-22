@@ -4,6 +4,7 @@ import logging
 import random
 import httpx
 import openai
+from aiohttp import web
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -11,6 +12,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import InlineKeyboardButton, BotCommand, InputMediaPhoto
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from dotenv import load_dotenv
 
 logging.basicConfig(level=logging.INFO)
@@ -18,7 +20,13 @@ load_dotenv()
 
 TOKEN = os.getenv("BOT_TOKEN")
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
+WEBHOOK_HOST = os.getenv("RENDER_EXTERNAL_URL", "https://drukar-expo-bot.onrender.com")
+WEBHOOK_PATH = f"/webhook/{TOKEN}"
+WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
+PORT = int(os.getenv("PORT", 10000))
+
 B24_WEBHOOK = "https://b24-733cj8.bitrix24.eu/rest/gyj1j3mxsy5x3g55"
+SHEETS_WEBHOOK = "https://script.google.com/macros/s/AKfycbxNRquK7qf46_Ww933xyjUJqRyNa4eAcfD2hA-aXBxSLjAEcEqJM9O7evIYYtEcQ32wag/exec"
 
 bot = Bot(token=TOKEN)
 storage = MemoryStorage()
@@ -29,17 +37,26 @@ GITHUB_BASE_URL = "https://raw.githubusercontent.com/olegivanovIOA/Drukar-expo-b
 purchase_attempts = 0
 
 CONTACT_EMAIL = "sales@drukar.com"
+CONTACT_ADMIN = "adm.drukar@gmail.com"
 STAND_INFO = "Стенд A-45, Павільйон №2, МВЦ, Київ"
 EXPO_NAME = "Addit EXPO 3D-2026"
 B24_SOURCE = "Telegram - DRUKAR_AdditExpo2026_bot"
-SHEETS_WEBHOOK = "https://script.google.com/macros/s/AKfycbxNRquK7qf46_Ww933xyjUJqRyNa4eAcfD2hA-aXBxSLjAEcEqJM9O7evIYYtEcQ32wag/exec"
+SITE_URL = "https://www.3drukar.com/ua/home-українська/"
 
 
+# --- FSM ---
+class ManualVCard(StatesGroup):
+    name = State()
+    company = State()
+    position = State()
+    phone = State()
+    email = State()
+    website = State()
+    notes = State()
 
 
-# --- Google Sheets: збереження контакту ---
+# --- Google Sheets ---
 async def save_to_sheets(contact: dict, source_type: str = "manual") -> bool:
-    import json as _json
     payload = {
         "name": contact.get("name", ""),
         "company": contact.get("company", ""),
@@ -64,60 +81,34 @@ async def save_to_sheets(contact: dict, source_type: str = "manual") -> bool:
         logging.error(f"Sheets request failed: {e}")
         return False
 
-# --- FSM для ручного вводу vCard ---
-class ManualVCard(StatesGroup):
-    name = State()
-    company = State()
-    position = State()
-    phone = State()
-    email = State()
-    website = State()
-    notes = State()
 
-
-# --- Bitrix24: створення угоди ---
+# --- Bitrix24 ---
 async def create_b24_deal(contact: dict, source_type: str = "manual") -> bool:
-    """
-    Створює Deal в Б24 (category_id=0, стадія NEW).
-    contact: dict з ключами name, company, position, phone, email, website, notes
-    """
     title = f"[{EXPO_NAME}] {contact.get('name', 'Невідомий')} — {contact.get('company', '')}"
-    
     comments_parts = []
+    if contact.get("phone"):
+        comments_parts.append(f"Телефон: {contact['phone']}")
+    if contact.get("email"):
+        comments_parts.append(f"Email: {contact['email']}")
     if contact.get("position"):
         comments_parts.append(f"Посада: {contact['position']}")
     if contact.get("website"):
         comments_parts.append(f"Сайт: {contact['website']}")
     if contact.get("notes"):
         comments_parts.append(f"Примітки: {contact['notes']}")
-    comments_parts.append(f"Джерело вводу: {'Ручний ввід менеджера' if source_type == 'manual' else 'Розпізнавання візитки (AI)'}")
+    comments_parts.append(f"Джерело: {'Ручний ввід менеджера' if source_type == 'manual' else 'Розпізнавання візитки (AI)'}")
     comments_parts.append(f"Захід: {EXPO_NAME}")
 
     fields = {
         "TITLE": title,
         "STAGE_ID": "NEW",
         "CATEGORY_ID": 0,
-        "SOURCE_ID": "WEBFORM",          # стандартний системний ID
+        "SOURCE_ID": "WEBFORM",
         "SOURCE_DESCRIPTION": B24_SOURCE,
         "COMMENTS": "\n".join(comments_parts),
         "TYPE_ID": "SALE",
     }
-
-    # Телефон
-    if contact.get("phone"):
-        fields["UF_CRM_PHONE"] = contact["phone"]  # запасний варіант
-        # Контакт — через CONTACT_ID ми не маємо, тому пишемо в коментар
-        comments_parts.insert(0, f"Телефон: {contact['phone']}")
-
-    # Email
-    if contact.get("email"):
-        comments_parts.insert(1, f"Email: {contact['email']}")
-
-    # Оновлюємо COMMENTS з телефоном/email на початку
-    fields["COMMENTS"] = "\n".join(comments_parts)
-
     payload = {"fields": fields, "params": {"REGISTER_SONET_EVENT": "Y"}}
-
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             r = await client.post(f"{B24_WEBHOOK}/crm.deal.add.json", json=payload)
@@ -133,7 +124,7 @@ async def create_b24_deal(contact: dict, source_type: str = "manual") -> bool:
         return False
 
 
-# --- Меню команд ---
+# --- Меню ---
 async def set_main_menu(bot: Bot):
     commands = [
         BotCommand(command="/start", description="Головне меню 🚀"),
@@ -145,10 +136,9 @@ async def set_main_menu(bot: Bot):
     await bot.set_my_commands(commands)
 
 
-# --- Головна клавіатура ---
 def get_main_menu():
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="🌐 Наш сайт", url="https://www.3drukar.com"))
+    builder.row(InlineKeyboardButton(text="🌐 Наш сайт", url=SITE_URL))
     builder.row(InlineKeyboardButton(text="🛒 Придбати котушку", callback_data="buy_filament"))
     builder.row(InlineKeyboardButton(text="📍 Де наш стенд?", callback_data="find_us"))
     builder.row(InlineKeyboardButton(text="📸 Галерея робіт", callback_data="gallery"))
@@ -173,7 +163,7 @@ async def cmd_start(message: types.Message, state: FSMContext):
     )
 
 
-# --- РОЗПІЗНАВАННЯ ВІЗИТОК (AI) ---
+# --- Розпізнавання візиток ---
 @dp.callback_query(F.data == "scan_card")
 async def ask_for_card(callback: types.CallbackQuery):
     await callback.message.answer(
@@ -189,38 +179,29 @@ async def handle_photo(message: types.Message):
         return await message.answer("⚠️ Помилка: API ключ OpenAI не налаштований.")
 
     status_msg = await message.answer("🔍 Уважно вивчаю візитку... Зачекайте кілька секунд.")
-
     photo = message.photo[-1]
     file_info = await bot.get_file(photo.file_id)
     file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_info.file_path}"
 
     prompt = (
         "Ти — експерт з розпізнавання візиток. Уважно подивись на фото. "
-        "Твоя задача: виписати ВСІ дані, які зможеш знайти. "
-        "Особлива увага: ім'я, прізвище, назва компанії, посада, опис послуг, адреса, телефони, "
-        "сайти та соцмережі (Instagram, Telegram, FB). "
-        "Оформи відповідь структуровано українською мовою. "
-        "Якщо чогось немає — просто не пиши цей рядок. "
-        "Окремим блоком в кінці дай JSON такого формату (тільки ці поля, без зайвого тексту):\n"
+        "Виписати ВСІ дані: ім'я, прізвище, компанія, посада, опис послуг, адреса, телефони, сайти, соцмережі. "
+        "Оформи відповідь структуровано українською мовою. Якщо чогось немає — не пиши цей рядок. "
+        "Окремим блоком в кінці дай JSON (тільки ці поля):\n"
         "```json\n{\"name\": \"\", \"company\": \"\", \"position\": \"\", \"phone\": \"\", \"email\": \"\", \"website\": \"\", \"notes\": \"\"}\n```"
     )
 
     try:
         response = ai_client.chat.completions.create(
             model="gpt-4o",
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": file_url}}
-                ],
-            }],
+            messages=[{"role": "user", "content": [
+                {"type": "text", "text": prompt},
+                {"type": "image_url", "image_url": {"url": file_url}}
+            ]}],
             max_tokens=900
         )
-
         full_text = response.choices[0].message.content
 
-        # Витягуємо JSON для Б24
         import json, re
         contact = {"name": "", "company": "", "position": "", "phone": "", "email": "", "website": "", "notes": ""}
         json_match = re.search(r'```json\s*(\{.*?\})\s*```', full_text, re.DOTALL)
@@ -229,35 +210,36 @@ async def handle_photo(message: types.Message):
                 contact = json.loads(json_match.group(1))
             except Exception:
                 pass
-            # Прибираємо JSON блок з тексту для відображення
             display_text = full_text[:json_match.start()].strip()
         else:
             display_text = full_text
 
-        final_text = (
-            f"✅ *Дані візитки успішно зчитано:*\n\n{display_text}\n\n"
-            f"---\n⏳ Зберігаю в CRM..."
+        await status_msg.edit_text(
+            f"✅ *Дані візитки успішно зчитано:*\n\n{display_text}\n\n---\n⏳ Зберігаю в CRM та Sheets...",
+            parse_mode="Markdown"
         )
-        await status_msg.edit_text(final_text, parse_mode="Markdown")
 
-        # Відправляємо в Б24 і Google Sheets паралельно
         b24_ok, sheets_ok = await asyncio.gather(
             create_b24_deal(contact, source_type="photo"),
             save_to_sheets(contact, source_type="photo")
         )
+
+        parts = []
         if b24_ok:
-            await message.answer("✅ Угоду створено в Битрікс24! Стадія: *Новий лід*", parse_mode="Markdown")
-        elif sheets_ok:
-            await message.answer("✅ Контакт збережено в Google Sheets. CRM тимчасово недоступна.", parse_mode="Markdown")
+            parts.append("✅ Битрікс24")
+        if sheets_ok:
+            parts.append("✅ Google Sheets")
+        if parts:
+            await message.answer(f"Збережено: {', '.join(parts)}", parse_mode="Markdown")
         else:
-            await message.answer("⚠️ Дані зчитано, але не вдалось зберегти. Збережіть вручну.")
+            await message.answer("⚠️ Не вдалось зберегти в CRM. Дані на екрані — збережіть вручну.")
 
     except Exception as e:
         logging.error(f"AI Error: {e}")
         await status_msg.edit_text("❌ Складна візитка! Спробуйте сфотографувати ближче при гарному освітленні.")
 
 
-# --- РУЧНИЙ ВВІД vCard ---
+# --- Ручний ввід ---
 @dp.message(Command("manual_contact"))
 @dp.callback_query(F.data == "manual_contact")
 async def start_manual_vcard(event, state: FSMContext):
@@ -266,8 +248,7 @@ async def start_manual_vcard(event, state: FSMContext):
     await state.set_state(ManualVCard.name)
     await message.answer(
         "✍️ *Ручний ввід контакту*\n\n"
-        "Введіть *ім'я та прізвище* контакту:\n"
-        "_(або надішліть — щоб пропустити)_",
+        "Введіть *ім'я та прізвище* контакту:\n_(або — щоб пропустити)_",
         parse_mode="Markdown"
     )
     if isinstance(event, types.CallbackQuery):
@@ -325,7 +306,6 @@ async def vcard_notes(message: types.Message, state: FSMContext):
     data = await state.get_data()
     await state.clear()
 
-    # Показуємо підсумок
     summary = (
         f"📋 *Підсумок контакту:*\n\n"
         f"👤 Ім'я: {data.get('name') or '—'}\n"
@@ -335,7 +315,7 @@ async def vcard_notes(message: types.Message, state: FSMContext):
         f"✉️ Email: {data.get('email') or '—'}\n"
         f"🌐 Сайт: {data.get('website') or '—'}\n"
         f"📝 Примітки: {data.get('notes') or '—'}\n\n"
-        f"⏳ Зберігаю в CRM..."
+        f"⏳ Зберігаю в CRM та Sheets..."
     )
     await message.answer(summary, parse_mode="Markdown")
 
@@ -343,61 +323,53 @@ async def vcard_notes(message: types.Message, state: FSMContext):
         create_b24_deal(data, source_type="manual"),
         save_to_sheets(data, source_type="manual")
     )
-    if b24_ok and sheets_ok:
+
+    parts = []
+    if b24_ok:
+        parts.append("✅ Битрікс24")
+    if sheets_ok:
+        parts.append("✅ Google Sheets")
+
+    if parts:
         await message.answer(
-            "✅ *Збережено в Битрікс24 та Google Sheets!*\n"
+            f"Збережено: {', '.join(parts)}\n"
             f"Стадія: Новий лід | Джерело: {B24_SOURCE}",
-            parse_mode="Markdown",
-            reply_markup=get_main_menu()
-        )
-    elif b24_ok:
-        await message.answer(
-            "✅ *Збережено в Битрікс24!*\n⚠️ Google Sheets недоступний.",
-            parse_mode="Markdown",
-            reply_markup=get_main_menu()
-        )
-    elif sheets_ok:
-        await message.answer(
-            "✅ *Збережено в Google Sheets!*\n⚠️ CRM тимчасово недоступна.",
-            parse_mode="Markdown",
             reply_markup=get_main_menu()
         )
     else:
         await message.answer(
-            f"⚠️ Не вдалось зберегти. Напишіть на {CONTACT_EMAIL}",
+            f"⚠️ Не вдалось зберегти автоматично.\nНапишіть на {CONTACT_EMAIL}",
             reply_markup=get_main_menu()
         )
 
 
-# --- КОРПОРАТИВНИЙ КОНТАКТ DRUKAR ---
+# --- Контакт DRUKAR ---
 @dp.message(Command("vcard"))
 @dp.callback_query(F.data == "get_vcard")
 async def send_vcard(event):
     message = event if isinstance(event, types.Message) else event.message
-
     vcard_data = (
         "BEGIN:VCARD\n"
         "VERSION:3.0\n"
         "FN:DRUKAR | 3D Друк\n"
         "ORG:DRUKAR\n"
         "TITLE:Виробник філаменту\n"
-        "TEL;TYPE=WORK,VOICE:+380442900000\n"
+        "TEL;TYPE=WORK,VOICE:+380991234567\n"
         f"EMAIL:{CONTACT_EMAIL}\n"
-        "URL:https://www.3drukar.com\n"
+        f"URL:{SITE_URL}\n"
         f"NOTE:{STAND_INFO} | {EXPO_NAME}\n"
         "END:VCARD"
     )
-
     await message.answer_contact(
-        phone_number="+380442900000",
+        phone_number="+380991234567",
         first_name="DRUKAR",
         last_name="3D Materials",
         vcard=vcard_data
     )
     await message.answer(
-        f"👆 Натисніть на картку вище → *Створити новий контакт*\n\n"
+        f"👆 Натисніть на картку → *Створити новий контакт*\n\n"
         f"✉️ Email: {CONTACT_EMAIL}\n"
-        f"🌐 Сайт: www.3drukar.com\n"
+        f"🌐 {SITE_URL}\n"
         f"📍 {STAND_INFO}",
         parse_mode="Markdown"
     )
@@ -405,7 +377,7 @@ async def send_vcard(event):
         await event.answer()
 
 
-# --- КУПИТИ КОТУШКУ ---
+# --- Купити ---
 @dp.message(Command("buy"))
 @dp.callback_query(F.data == "buy_filament")
 async def cmd_buy(event):
@@ -413,7 +385,6 @@ async def cmd_buy(event):
     message = event if isinstance(event, types.Message) else event.message
     purchase_attempts += random.randint(1, 3)
     display_count = 142 + purchase_attempts
-
     await message.answer_photo(
         photo=f"{GITHUB_BASE_URL}qr_payment.png",
         caption=(
@@ -421,7 +392,7 @@ async def cmd_buy(event):
             f"Цю котушку сьогодні обрали вже *{display_count}* раз(ів).\n\n"
             f"🛒 *Оплата на ФОП*\n"
             f"Відскануйте код вище та надішліть квитанцію в цей чат.\n\n"
-            f"📍 Забрати замовлення можна просто зараз на {STAND_INFO}!\n\n"
+            f"📍 Забрати замовлення: {STAND_INFO}\n\n"
             f"✉️ Питання: {CONTACT_EMAIL}"
         ),
         parse_mode="Markdown"
@@ -430,7 +401,7 @@ async def cmd_buy(event):
         await event.answer()
 
 
-# --- ДЕ НАШ СТЕНД ---
+# --- Де стенд ---
 @dp.message(Command("find_us"))
 @dp.callback_query(F.data == "find_us")
 async def find_us(event):
@@ -450,7 +421,7 @@ async def find_us(event):
         await event.answer()
 
 
-# --- ГАЛЕРЕЯ ---
+# --- Галерея ---
 @dp.callback_query(F.data == "gallery")
 async def show_gallery(callback: types.CallbackQuery):
     await callback.message.answer("📸 Завантажую галерею наших робіт...")
@@ -458,21 +429,32 @@ async def show_gallery(callback: types.CallbackQuery):
     try:
         await callback.message.answer_media_group(media=album)
     except Exception:
-        await callback.message.answer("⚠️ Зображення ще завантажуються, спробуйте за кілька секунд.")
+        await callback.message.answer("⚠️ Спробуйте за кілька секунд.")
     await callback.answer()
 
 
-# --- ЗАПУСК ---
-async def main():
-    await bot.delete_webhook(drop_pending_updates=True)
-    await asyncio.sleep(3)
+# --- ЗАПУСК через WEBHOOK ---
+async def on_startup(app):
+    await bot.set_webhook(WEBHOOK_URL, drop_pending_updates=True)
     await set_main_menu(bot)
-    logging.info("DRUKAR Bot запущено! 🇺🇦")
-    await dp.start_polling(bot, allowed_updates=["message", "callback_query"])
+    logging.info(f"DRUKAR Bot запущено! Webhook: {WEBHOOK_URL} 🇺🇦")
+
+
+async def on_shutdown(app):
+    await bot.delete_webhook()
+    logging.info("Бот зупинено")
+
+
+def main():
+    app = web.Application()
+    app.on_startup.append(on_startup)
+    app.on_shutdown.append(on_shutdown)
+
+    SimpleRequestHandler(dispatcher=dp, bot=bot).register(app, path=WEBHOOK_PATH)
+    setup_application(app, dp, bot=bot)
+
+    web.run_app(app, host="0.0.0.0", port=PORT)
 
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
-        logging.info("Бот зупинено")
+    main()
