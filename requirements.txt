@@ -1,5 +1,6 @@
-aiogram
+aiogram[fsm]
 python-dotenv
 openai
-pillow
+httpx
 requests
+pillow
