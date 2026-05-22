@@ -301,7 +301,7 @@ async def cmd_buy(event):
     purchase_attempts += random.randint(1, 3)
     display_count = 142 + purchase_attempts
     await message.answer_photo(
-        photo=f"{GITHUB_BASE_URL}qr_payment.png",
+        photo=f"{GITHUB_BASE_URL}qr_payment2.png",
         caption=(
             f"🔥 *Expo hit!*\n{display_count} people chose this spool today.\n\n"
             f"🛒 *Payment to FOP*\nScan QR above and send receipt here.\n\n"
