@@ -78,11 +78,11 @@ async def create_b24_deal(contact: dict, source_type: str = "manual") -> bool:
     company = contact.get("company", "")
     title = f"[{EXPO_NAME}] {name} - {company}"
     lines = []
-    if contact.get("phone"): lines.append(f"Phone: {contact['phone']}")
+    if contact.get("phone"): lines.append(f"Телефон: {contact['phone']}")
     if contact.get("email"): lines.append(f"Email: {contact['email']}")
-    if contact.get("position"): lines.append(f"Position: {contact['position']}")
-    if contact.get("website"): lines.append(f"Website: {contact['website']}")
-    if contact.get("notes"): lines.append(f"Notes: {contact['notes']}")
+    if contact.get("position"): lines.append(f"Посада: {contact['position']}")
+    if contact.get("website"): lines.append(f"Сайт: {contact['website']}")
+    if contact.get("notes"): lines.append(f"Примітки: {contact['notes']}")
     lines.append(f"Source: {'Manual' if source_type == 'manual' else 'AI card scan'}")
     lines.append(f"Event: {EXPO_NAME}")
 
@@ -112,11 +112,11 @@ async def create_b24_deal(contact: dict, source_type: str = "manual") -> bool:
 
 async def set_main_menu(bot: Bot):
     commands = [
-        BotCommand(command="/start", description="Main menu"),
-        BotCommand(command="/find_us", description="Find our stand"),
-        BotCommand(command="/buy", description="Buy a spool"),
+        BotCommand(command="/start", description="Головне меню"),
+        BotCommand(command="/find_us", description="Де наш стенд?"),
+        BotCommand(command="/buy", description="Придбати котушку"),
         BotCommand(command="/vcard", description="DRUKAR contact"),
-        BotCommand(command="/manual_contact", description="Add contact manually"),
+        BotCommand(command="/manual_contact", description="Ввести контакт вручну"),
     ]
     await bot.set_my_commands(commands)
 
@@ -160,7 +160,7 @@ async def ask_for_card(callback: types.CallbackQuery):
 async def handle_photo(message: types.Message):
     if not OPENAI_KEY:
         return await message.answer("\u26a0\ufe0f \u041f\u043e\u043c\u0438\u043b\u043a\u0430: OpenAI \u043a\u043b\u044e\u0447 \u043d\u0435 \u043d\u0430\u043b\u0430\u0448\u0442\u043e\u0432\u0430\u043d\u0438\u0439.")
-    status_msg = await message.answer("🔍 Analyzing card...")
+    status_msg = await message.answer("🔍 Аналізую візитку...")
     photo = message.photo[-1]
     file_info = await bot.get_file(photo.file_id)
     file_url = f"https://api.telegram.org/file/bot{TOKEN}/{file_info.file_path}"
@@ -188,7 +188,7 @@ async def handle_photo(message: types.Message):
             display_text = full_text[:json_match.start()].strip()
         else:
             display_text = full_text
-        await status_msg.edit_text(f"✅ *Card data:*\n\n{display_text}\n\n⏳ Saving...", parse_mode="Markdown")
+        await status_msg.edit_text(f"✅ *Дані візитки:*\n\n{display_text}\n\n⏳ Зберігаю...", parse_mode="Markdown")
         b24_ok, sheets_ok = await asyncio.gather(
             create_b24_deal(contact, source_type="photo"),
             save_to_sheets(contact, source_type="photo")
@@ -196,10 +196,10 @@ async def handle_photo(message: types.Message):
         parts = []
         if b24_ok: parts.append("✅ Bitrix24")
         if sheets_ok: parts.append("✅ Google Sheets")
-        await message.answer(f"\u0417\u0431\u0435\u0440\u0435\u0436\u0435\u043d\u043e: {', '.join(parts)}" if parts else "⚠️ Could not save automatically.")
+        await message.answer(f"\u0417\u0431\u0435\u0440\u0435\u0436\u0435\u043d\u043e: {', '.join(parts)}" if parts else "⚠️ Не вдалось зберегти автоматично.")
     except Exception as e:
         logging.error(f"AI Error: {e}")
-        await status_msg.edit_text("❌ Could not read card. Try better lighting.")
+        await status_msg.edit_text("❌ Складна візитка! Спробуйте сфотографувати ближче.")
 
 
 @dp.message(Command("manual_contact"))
@@ -254,7 +254,7 @@ async def vcard_notes(message: types.Message, state: FSMContext):
     data = await state.get_data()
     await state.clear()
     summary = (
-        f"📋 *Summary:*\n\n"
+        f"📋 *Підсумок:*\n\n"
         f"👤 {data.get('name') or '-'}\n"
         f"🏢 {data.get('company') or '-'}\n"
         f"💼 {data.get('position') or '-'}\n"
@@ -262,7 +262,7 @@ async def vcard_notes(message: types.Message, state: FSMContext):
         f"✉️ {data.get('email') or '-'}\n"
         f"🌐 {data.get('website') or '-'}\n"
         f"📝 {data.get('notes') or '-'}\n\n"
-        f"⏳ Saving..."
+        f"⏳ Зберігаю..."
     )
     await message.answer(summary, parse_mode="Markdown")
     b24_ok, sheets_ok = await asyncio.gather(
@@ -303,8 +303,8 @@ async def cmd_buy(event):
     await message.answer_photo(
         photo=f"{GITHUB_BASE_URL}qr_payment2.png",
         caption=(
-            f"🔥 *Expo hit!*\n{display_count} people chose this spool today.\n\n"
-            f"🛒 *Payment to FOP*\nScan QR above and send receipt here.\n\n"
+            f"🔥 *Хіт виставки!*\n{display_count} людей обрали цю котушку сьогодні.\n\n"
+            f"🛒 *Оплата на ФОП*\nВідскануйте QR і надішліть квитанцію в цей чат.\n\n"
             f"📍 {STAND_INFO}\n✉️ {CONTACT_EMAIL}"
         ),
         parse_mode="Markdown"
@@ -323,7 +323,7 @@ async def find_us(event):
             f"🏢 Kyiv, IEC (Brovarskyi Ave, 15)\n"
             f"✅ {STAND_INFO}\n\n"
             f"✉️ {CONTACT_EMAIL}\n"
-            f"🔗 [Official expo website](https://www.iec-expo.com.ua/addit-2026.html)"
+            f"🔗 [Офіційний сайт виставки](https://www.iec-expo.com.ua/addit-2026.html)"
         ),
         parse_mode="Markdown"
     )
@@ -332,7 +332,7 @@ async def find_us(event):
 
 @dp.callback_query(F.data == "gallery")
 async def show_gallery(callback: types.CallbackQuery):
-    await callback.message.answer("📸 Loading gallery...")
+    await callback.message.answer("📸 Завантажую галерею...")
     album = [InputMediaPhoto(media=f"{GITHUB_BASE_URL}work{i}.jpg") for i in range(1, 11)]
     try:
         await callback.message.answer_media_group(media=album)
