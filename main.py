@@ -90,7 +90,7 @@ async def create_b24_deal(contact: dict, source_type: str = "manual") -> bool:
         "TITLE": title,
         "STAGE_ID": "NEW",
         "CATEGORY_ID": 0,
-        "SOURCE_ID": "WEBFORM",
+        "SOURCE_ID": "7|TELEGRAM",
         "SOURCE_DESCRIPTION": B24_SOURCE,
         "COMMENTS": "\n".join(lines),
         "TYPE_ID": "SALE",
