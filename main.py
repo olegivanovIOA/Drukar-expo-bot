@@ -32,7 +32,37 @@ CONTACT_EMAIL = "sales@drukar.com"
 STAND_INFO = "Стенд A-45, Павільйон №2, МВЦ, Київ"
 EXPO_NAME = "Addit EXPO 3D-2026"
 B24_SOURCE = "Telegram - DRUKAR_AdditExpo2026_bot"
+SHEETS_WEBHOOK = "https://script.google.com/macros/s/AKfycbxNRquK7qf46_Ww933xyjUJqRyNa4eAcfD2hA-aXBxSLjAEcEqJM9O7evIYYtEcQ32wag/exec"
 
+
+
+
+# --- Google Sheets: збереження контакту ---
+async def save_to_sheets(contact: dict, source_type: str = "manual") -> bool:
+    import json as _json
+    payload = {
+        "name": contact.get("name", ""),
+        "company": contact.get("company", ""),
+        "position": contact.get("position", ""),
+        "phone": contact.get("phone", ""),
+        "email": contact.get("email", ""),
+        "website": contact.get("website", ""),
+        "notes": contact.get("notes", ""),
+        "source": "Ручний ввід менеджера" if source_type == "manual" else "Розпізнавання візитки (AI)"
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10, follow_redirects=True) as client:
+            r = await client.post(SHEETS_WEBHOOK, json=payload)
+            result = r.json()
+            if result.get("status") == "ok":
+                logging.info("Sheets: контакт збережено")
+                return True
+            else:
+                logging.error(f"Sheets error: {result}")
+                return False
+    except Exception as e:
+        logging.error(f"Sheets request failed: {e}")
+        return False
 
 # --- FSM для ручного вводу vCard ---
 class ManualVCard(StatesGroup):
@@ -210,12 +240,17 @@ async def handle_photo(message: types.Message):
         )
         await status_msg.edit_text(final_text, parse_mode="Markdown")
 
-        # Відправляємо в Б24
-        success = await create_b24_deal(contact, source_type="photo")
-        if success:
+        # Відправляємо в Б24 і Google Sheets паралельно
+        b24_ok, sheets_ok = await asyncio.gather(
+            create_b24_deal(contact, source_type="photo"),
+            save_to_sheets(contact, source_type="photo")
+        )
+        if b24_ok:
             await message.answer("✅ Угоду створено в Битрікс24! Стадія: *Новий лід*", parse_mode="Markdown")
+        elif sheets_ok:
+            await message.answer("✅ Контакт збережено в Google Sheets. CRM тимчасово недоступна.", parse_mode="Markdown")
         else:
-            await message.answer("⚠️ Дані зчитано, але CRM наразі недоступна. Збережіть дані вручну.")
+            await message.answer("⚠️ Дані зчитано, але не вдалось зберегти. Збережіть вручну.")
 
     except Exception as e:
         logging.error(f"AI Error: {e}")
@@ -304,18 +339,32 @@ async def vcard_notes(message: types.Message, state: FSMContext):
     )
     await message.answer(summary, parse_mode="Markdown")
 
-    success = await create_b24_deal(data, source_type="manual")
-    if success:
+    b24_ok, sheets_ok = await asyncio.gather(
+        create_b24_deal(data, source_type="manual"),
+        save_to_sheets(data, source_type="manual")
+    )
+    if b24_ok and sheets_ok:
         await message.answer(
-            "✅ *Угоду створено в Битрікс24!*\n"
+            "✅ *Збережено в Битрікс24 та Google Sheets!*\n"
             f"Стадія: Новий лід | Джерело: {B24_SOURCE}",
+            parse_mode="Markdown",
+            reply_markup=get_main_menu()
+        )
+    elif b24_ok:
+        await message.answer(
+            "✅ *Збережено в Битрікс24!*\n⚠️ Google Sheets недоступний.",
+            parse_mode="Markdown",
+            reply_markup=get_main_menu()
+        )
+    elif sheets_ok:
+        await message.answer(
+            "✅ *Збережено в Google Sheets!*\n⚠️ CRM тимчасово недоступна.",
             parse_mode="Markdown",
             reply_markup=get_main_menu()
         )
     else:
         await message.answer(
-            "⚠️ Дані збережено локально, але CRM наразі недоступна.\n"
-            f"Зверніться до менеджера або напишіть на {CONTACT_EMAIL}",
+            f"⚠️ Не вдалось зберегти. Напишіть на {CONTACT_EMAIL}",
             reply_markup=get_main_menu()
         )
 
