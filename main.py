@@ -159,7 +159,7 @@ async def ask_for_card(callback: types.CallbackQuery):
 @dp.message(F.photo)
 async def handle_photo(message: types.Message):
     if not OPENAI_KEY:
-        return await message.answer("Error: OpenAI key not set.")
+        return await message.answer("\u26a0\ufe0f \u041f\u043e\u043c\u0438\u043b\u043a\u0430: OpenAI \u043a\u043b\u044e\u0447 \u043d\u0435 \u043d\u0430\u043b\u0430\u0448\u0442\u043e\u0432\u0430\u043d\u0438\u0439.")
     status_msg = await message.answer("🔍 Analyzing card...")
     photo = message.photo[-1]
     file_info = await bot.get_file(photo.file_id)
@@ -196,7 +196,7 @@ async def handle_photo(message: types.Message):
         parts = []
         if b24_ok: parts.append("✅ Bitrix24")
         if sheets_ok: parts.append("✅ Google Sheets")
-        await message.answer(f"Saved: {', '.join(parts)}" if parts else "⚠️ Could not save automatically.")
+        await message.answer(f"\u0417\u0431\u0435\u0440\u0435\u0436\u0435\u043d\u043e: {', '.join(parts)}" if parts else "⚠️ Could not save automatically.")
     except Exception as e:
         logging.error(f"AI Error: {e}")
         await status_msg.edit_text("❌ Could not read card. Try better lighting.")
@@ -208,7 +208,7 @@ async def start_manual_vcard(event, state: FSMContext):
     message = event if isinstance(event, types.Message) else event.message
     await state.clear()
     await state.set_state(ManualVCard.name)
-    await message.answer("✍️ *Manual contact entry*\n\nEnter *name and surname*:\n_(or - to skip)_", parse_mode="Markdown")
+    await message.answer("✍️ *\u0420\u0443\u0447\u043d\u0438\u0439 \u0432\u0432\u0456\u0434 \u043a\u043e\u043d\u0442\u0430\u043a\u0442\u0443*\n\n\u0412\u0432\u0435\u0434\u0456\u0442\u044c *\u0456\u043c'\u044f \u0442\u0430 \u043f\u0440\u0456\u0437\u0432\u0438\u0449\u0435*:\n_(\u0430\u0431\u043e - \u0449\u043e\u0431 \u043f\u0440\u043e\u043f\u0443\u0441\u0442\u0438\u0442\u0438)_", parse_mode="Markdown")
     if isinstance(event, types.CallbackQuery): await event.answer()
 
 
@@ -216,19 +216,19 @@ async def start_manual_vcard(event, state: FSMContext):
 async def vcard_name(message: types.Message, state: FSMContext):
     await state.update_data(name=message.text if message.text != "-" else "")
     await state.set_state(ManualVCard.company)
-    await message.answer("🏢 *Company name:*", parse_mode="Markdown")
+    await message.answer("🏢 *\u041d\u0430\u0437\u0432\u0430 \u043a\u043e\u043c\u043f\u0430\u043d\u0456\u0457:*", parse_mode="Markdown")
 
 @dp.message(ManualVCard.company)
 async def vcard_company(message: types.Message, state: FSMContext):
     await state.update_data(company=message.text if message.text != "-" else "")
     await state.set_state(ManualVCard.position)
-    await message.answer("💼 *Position:*", parse_mode="Markdown")
+    await message.answer("💼 *\u041f\u043e\u0441\u0430\u0434\u0430:*", parse_mode="Markdown")
 
 @dp.message(ManualVCard.position)
 async def vcard_position(message: types.Message, state: FSMContext):
     await state.update_data(position=message.text if message.text != "-" else "")
     await state.set_state(ManualVCard.phone)
-    await message.answer("📞 *Phone:*", parse_mode="Markdown")
+    await message.answer("📞 *\u0422\u0435\u043b\u0435\u0444\u043e\u043d:*", parse_mode="Markdown")
 
 @dp.message(ManualVCard.phone)
 async def vcard_phone(message: types.Message, state: FSMContext):
@@ -240,13 +240,13 @@ async def vcard_phone(message: types.Message, state: FSMContext):
 async def vcard_email(message: types.Message, state: FSMContext):
     await state.update_data(email=message.text if message.text != "-" else "")
     await state.set_state(ManualVCard.website)
-    await message.answer("🌐 *Website / social media:*", parse_mode="Markdown")
+    await message.answer("🌐 *\u0421\u0430\u0439\u0442 / \u0441\u043e\u0446\u043c\u0435\u0440\u0435\u0436\u0456:*", parse_mode="Markdown")
 
 @dp.message(ManualVCard.website)
 async def vcard_website(message: types.Message, state: FSMContext):
     await state.update_data(website=message.text if message.text != "-" else "")
     await state.set_state(ManualVCard.notes)
-    await message.answer("📝 *Notes:*\n_(or - to skip)_", parse_mode="Markdown")
+    await message.answer("📝 *\u041f\u0440\u0438\u043c\u0456\u0442\u043a\u0438:*\n_(\u0430\u0431\u043e - \u0449\u043e\u0431 \u043f\u0440\u043e\u043f\u0443\u0441\u0442\u0438\u0442\u0438)_", parse_mode="Markdown")
 
 @dp.message(ManualVCard.notes)
 async def vcard_notes(message: types.Message, state: FSMContext):
@@ -273,9 +273,9 @@ async def vcard_notes(message: types.Message, state: FSMContext):
     if b24_ok: parts.append("✅ Bitrix24")
     if sheets_ok: parts.append("✅ Google Sheets")
     if parts:
-        await message.answer(f"Saved: {', '.join(parts)}", reply_markup=get_main_menu())
+        await message.answer(f"\u0417\u0431\u0435\u0440\u0435\u0436\u0435\u043d\u043e: {', '.join(parts)}", reply_markup=get_main_menu())
     else:
-        await message.answer(f"⚠️ Could not save. Email: {CONTACT_EMAIL}", reply_markup=get_main_menu())
+        await message.answer(f"⚠️ \u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0431\u0435\u0440\u0435\u0433\u0442\u0438. Email: {CONTACT_EMAIL}", reply_markup=get_main_menu())
 
 
 @dp.message(Command("vcard"))
@@ -289,7 +289,7 @@ async def send_vcard(event):
         f"NOTE:{STAND_INFO} | {EXPO_NAME}\nEND:VCARD"
     )
     await message.answer_contact(phone_number="+380991234567", first_name="DRUKAR", last_name="3D Materials", vcard=vcard_data)
-    await message.answer(f"👆 Tap card to save contact\n\n✉️ {CONTACT_EMAIL}\n🌐 {SITE_URL}\n📍 {STAND_INFO}", parse_mode="Markdown")
+    await message.answer(f"👆 \u041d\u0430\u0442\u0438\u0441\u043d\u0456\u0442\u044c \u043d\u0430 \u043a\u0430\u0440\u0442\u043a\u0443 \u0449\u043e\u0431 \u0437\u0431\u0435\u0440\u0435\u0433\u0442\u0438 \u043a\u043e\u043d\u0442\u0430\u043a\u0442\n\n✉️ {CONTACT_EMAIL}\n🌐 {SITE_URL}\n📍 {STAND_INFO}", parse_mode="Markdown")
     if isinstance(event, types.CallbackQuery): await event.answer()
 
 
