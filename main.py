@@ -25,7 +25,7 @@ WEBHOOK_PATH = f"/webhook/{TOKEN}"
 WEBHOOK_URL = f"{WEBHOOK_HOST}{WEBHOOK_PATH}"
 PORT = int(os.getenv("PORT", 10000))
 
-B24_WEBHOOK = "https://b24-733cj8.bitrix24.eu/rest/gyj1j3mxsy5x3g55"
+B24_WEBHOOK = "https://b24-733cj8.bitrix24.eu/rest/2517/w9ibissc7lvshipw"
 SHEETS_WEBHOOK = "https://script.google.com/macros/s/AKfycbxNRquK7qf46_Ww933xyjUJqRyNa4eAcfD2hA-aXBxSLjAEcEqJM9O7evIYYtEcQ32wag/exec"
 
 bot = Bot(token=TOKEN)
