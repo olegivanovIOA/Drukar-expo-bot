@@ -18,7 +18,7 @@ load_dotenv()
 
 TOKEN = os.getenv("BOT_TOKEN")
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
-B24_WEBHOOK = "https://b24-733cj8.bitrix24.eu/rest/1/gyj1j3mxsy5x3g55"
+B24_WEBHOOK = "https://b24-733cj8.bitrix24.eu/rest/gyj1j3mxsy5x3g55"
 
 bot = Bot(token=TOKEN)
 storage = MemoryStorage()
@@ -415,10 +415,11 @@ async def show_gallery(callback: types.CallbackQuery):
 
 # --- ЗАПУСК ---
 async def main():
-    await set_main_menu(bot)
     await bot.delete_webhook(drop_pending_updates=True)
+    await asyncio.sleep(3)
+    await set_main_menu(bot)
     logging.info("DRUKAR Bot запущено! 🇺🇦")
-    await dp.start_polling(bot)
+    await dp.start_polling(bot, allowed_updates=["message", "callback_query"])
 
 
 if __name__ == "__main__":
