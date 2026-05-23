@@ -306,7 +306,7 @@ async def cmd_buy(event):
     pay_builder = InlineKeyboardBuilder()
     pay_builder.row(InlineKeyboardButton(
         text="\U0001f4b3 \u041e\u0442\u0440\u0438\u043c\u0430\u0442\u0438 \u0442\u0435\u0441\u0442\u043e\u0432\u0443 \u043a\u043e\u0442\u0443\u0448\u043a\u0443 (800 \u0433\u0440\u043d)",
-        url="https://bank.gov.ua/qr/QkNECjAwMgoxClVDVAoK0KTQntCfINCb0L7QsdC-0LLQsCDQkNC90L3QsCDQktCw0LvQtdGA0ZbRl9Cy0L3QsApVQTA4MzIyMDAxMDAwMDAyNjAwODM4MDAwMjg5OQoKMzQ1ODIwMjU0NwoKCgoK"
+        web_app=types.WebAppInfo(url="https://bank.gov.ua/qr/QkNECjAwMgoxClVDVAoK0KTQntCfINCb0L7QsdC-0LLQsCDQkNC90L3QsCDQktCw0LvQtdGA0ZbRl9Cy0L3QsApVQTA4MzIyMDAxMDAwMDAyNjAwODM4MDAwMjg5OQoKMzQ1ODIwMjU0NwoKCgoK")
     ))
 
     await message.answer_photo(
