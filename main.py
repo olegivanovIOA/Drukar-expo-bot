@@ -115,7 +115,7 @@ async def set_main_menu(bot: Bot):
         BotCommand(command="/start", description="Головне меню"),
         BotCommand(command="/find_us", description="Де наш стенд?"),
         BotCommand(command="/buy", description="Придбати котушку"),
-        BotCommand(command="/vcard", description="DRUKAR contact"),
+        BotCommand(command="/vcard", description="Контакт DRUKAR"),
         BotCommand(command="/manual_contact", description="Ввести контакт вручну"),
     ]
     await bot.set_my_commands(commands)
@@ -283,16 +283,17 @@ async def vcard_notes(message: types.Message, state: FSMContext):
 async def send_vcard(event):
     message = event if isinstance(event, types.Message) else event.message
     vcard_data = (
-        "BEGIN:VCARD\nVERSION:3.0\nFN:DRUKAR 3D Materials\nORG:DRUKAR\n"
-        "TITLE:Filament Manufacturer\nTEL;TYPE=WORK,VOICE:+380991234567\n"
+        "BEGIN:VCARD\nVERSION:3.0\nFN:DRUKAR 3D Матеріали\nORG:DRUKAR\n"
+        "TITLE:Виробник філаменту\nTEL;TYPE=WORK,VOICE:+380991234567\n"
         f"EMAIL:{CONTACT_EMAIL}\nURL:{SITE_URL}\n"
         f"NOTE:{STAND_INFO} | {EXPO_NAME}\nEND:VCARD"
     )
-    await message.answer_contact(phone_number="+380991234567", first_name="DRUKAR", last_name="3D Materials", vcard=vcard_data)
+    await message.answer_contact(phone_number="+380991234567", first_name="DRUKAR", last_name="Матеріали", vcard=vcard_data)
     await message.answer(f"👆 \u041d\u0430\u0442\u0438\u0441\u043d\u0456\u0442\u044c \u043d\u0430 \u043a\u0430\u0440\u0442\u043a\u0443 \u0449\u043e\u0431 \u0437\u0431\u0435\u0440\u0435\u0433\u0442\u0438 \u043a\u043e\u043d\u0442\u0430\u043a\u0442\n\n✉️ {CONTACT_EMAIL}\n🌐 {SITE_URL}\n📍 {STAND_INFO}", parse_mode="Markdown")
     if isinstance(event, types.CallbackQuery): await event.answer()
 
 
+@dp.message(Command("buy"))
 @dp.message(Command("buy"))
 @dp.callback_query(F.data == "buy_filament")
 async def cmd_buy(event):
@@ -300,17 +301,26 @@ async def cmd_buy(event):
     message = event if isinstance(event, types.Message) else event.message
     purchase_attempts += random.randint(1, 3)
     display_count = 142 + purchase_attempts
+
+    # Кнопка оплати
+    pay_builder = InlineKeyboardBuilder()
+    pay_builder.row(InlineKeyboardButton(
+        text="\U0001f4b3 \u041e\u0442\u0440\u0438\u043c\u0430\u0442\u0438 \u0442\u0435\u0441\u0442\u043e\u0432\u0443 \u043a\u043e\u0442\u0443\u0448\u043a\u0443 (800 \u0433\u0440\u043d)",
+        url="https://bank.gov.ua/qr/QkNECjAwMgoxClVDVAoK0KTQntCfINCb0L7QsdC-0LLQsCDQkNC90L3QsCDQktCw0LvQtdGA0ZbRl9Cy0L3QsApVQTA4MzIyMDAxMDAwMDAyNjAwODM4MDAwMjg5OQoKMzQ1ODIwMjU0NwoKCgoK"
+    ))
+
     await message.answer_photo(
         photo=f"{GITHUB_BASE_URL}qr_payment2.png",
         caption=(
-            f"🔥 *Хіт виставки!*\n{display_count} людей обрали цю котушку сьогодні.\n\n"
-            f"🛒 *Оплата на ФОП*\nВідскануйте QR і надішліть квитанцію в цей чат.\n\n"
-            f"📍 {STAND_INFO}\n✉️ {CONTACT_EMAIL}"
+            f"\U0001f525 *\u0425\u0456\u0442 \u0432\u0438\u0441\u0442\u0430\u0432\u043a\u0438!*\n{display_count} \u043b\u044e\u0434\u0435\u0439 \u043e\u0431\u0440\u0430\u043b\u0438 \u0446\u044e \u043a\u043e\u0442\u0443\u0448\u043a\u0443 \u0441\u044c\u043e\u0433\u043e\u0434\u043d\u0456.\n\n"
+            f"\U0001f4b3 *\u041e\u043f\u043b\u0430\u0442\u0430 800 \u0433\u0440\u043d* — \u043d\u0430\u0442\u0438\u0441\u043d\u0456\u0442\u044c \u043a\u043d\u043e\u043f\u043a\u0443 \u043d\u0438\u0436\u0447\u0435 \u0430\u0431\u043e \u0432\u0456\u0434\u0441\u043a\u0430\u043d\u0443\u0439\u0442\u0435 QR.\n"
+            f"\u041f\u0456\u0441\u043b\u044f \u043e\u043f\u043b\u0430\u0442\u0438 — \u043d\u0430\u0434\u0456\u0448\u043b\u0456\u0442\u044c \u043a\u0432\u0438\u0442\u0430\u043d\u0446\u0456\u044e \u0432 \u0446\u0435\u0439 \u0447\u0430\u0442.\n\n"
+            f"\U0001f4cd {STAND_INFO}\n\u2709\ufe0f {CONTACT_EMAIL}"
         ),
-        parse_mode="Markdown"
+        parse_mode="Markdown",
+        reply_markup=pay_builder.as_markup()
     )
     if isinstance(event, types.CallbackQuery): await event.answer()
-
 
 @dp.message(Command("find_us"))
 @dp.callback_query(F.data == "find_us")
@@ -337,7 +347,7 @@ async def show_gallery(callback: types.CallbackQuery):
     try:
         await callback.message.answer_media_group(media=album)
     except Exception:
-        await callback.message.answer("⚠️ Try again in a few seconds.")
+        await callback.message.answer("⚠️ Спробуйте знову через кілька секунд.")
     await callback.answer()
 
 
