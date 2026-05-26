@@ -19,7 +19,7 @@ load_dotenv()
 
 TOKEN = os.getenv("BOT_TOKEN")
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
-B24_WEBHOOK = "https://b24-733cj8.bitrix24.eu/rest/2517/w9ibissc7lvshipw"
+CRM_WEBHOOK = "https://b24-733cj8.bitrix24.eu/rest/2517/w9ibissc7lvshipw"
 SHEETS_WEBHOOK = "https://script.google.com/macros/s/AKfycbxNRquK7qf46_Ww933xyjUJqRyNa4eAcfD2hA-aXBxSLjAEcEqJM9O7evIYYtEcQ32wag/exec"
 PAY_URL = "https://bank.gov.ua/qr/QkNECjAwMgoxClVDVAoK0KTQntCfINCb0L7QsdC-0LLQsCDQkNC90L3QsCDQktCw0LvQtdGA0ZbRl9Cy0L3QsApVQTA4MzIyMDAxMDAwMDAyNjAwODM4MDAwMjg5OQoKMzQ1ODIwMjU0NwoKCgoK"
 
@@ -33,7 +33,7 @@ GITHUB_BASE_URL = "https://raw.githubusercontent.com/olegivanovIOA/Drukar-expo-b
 CONTACT_EMAIL = "sales@drukar.com"
 STAND_INFO = "Стенд D-08, Павільйон 3, МВЦ, Київ"
 EXPO_NAME = "Addit EXPO 3D-2026"
-B24_SOURCE = "Telegram - DRUKAR_AdditExpo2026_bot"
+CRM_SOURCE = "Telegram - DRUKAR_AdditExpo2026_bot"
 SITE_URL = "https://www.3drukar.com/ua/home-%D1%83%D0%BA%D1%80%D0%B0%D1%97%D0%BD%D1%81%D1%8C%D0%BA%D0%B0/"
 
 
@@ -105,22 +105,22 @@ async def create_b24_deal(contact: dict, source_type: str = "manual") -> bool:
         "STAGE_ID": "NEW",
         "CATEGORY_ID": 0,
         "SOURCE_ID": "7|TELEGRAM",
-        "SOURCE_DESCRIPTION": B24_SOURCE,
+        "SOURCE_DESCRIPTION": CRM_SOURCE,
         "COMMENTS": "\n".join(lines),
         "TYPE_ID": "SALE",
     }
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            r = await client.post(f"{B24_WEBHOOK}/crm.deal.add.json", json={"fields": fields})
+            r = await client.post(f"{CRM_WEBHOOK}/crm.deal.add.json", json={"fields": fields})
             data = r.json()
             if data.get("result"):
-                logging.info(f"B24 Deal created: {data['result']}")
+                logging.info(f"CRM Deal created: {data['result']}")
                 return True
             else:
-                logging.error(f"B24 error: {data}")
+                logging.error(f"CRM error: {data}")
                 return False
     except Exception as e:
-        logging.error(f"B24 failed: {e}")
+        logging.error(f"CRM failed: {e}")
         return False
 
 
@@ -211,7 +211,7 @@ async def handle_photo(message: types.Message):
             save_to_sheets(contact, source_type="photo")
         )
         parts = []
-        if b24_ok: parts.append("\u2705 Bitrix24")
+        if b24_ok: parts.append("\u2705 CRM")
         if sheets_ok: parts.append("\u2705 Google Sheets")
         await message.answer(f"\u0417\u0431\u0435\u0440\u0435\u0436\u0435\u043d\u043e: {', '.join(parts)}" if parts else "\u26a0\ufe0f \u041d\u0435 \u0432\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0431\u0435\u0440\u0435\u0433\u0442\u0438 \u0430\u0432\u0442\u043e\u043c\u0430\u0442\u0438\u0447\u043d\u043e.")
     except Exception as e:
@@ -291,7 +291,7 @@ async def vcard_notes(message: types.Message, state: FSMContext):
         save_to_sheets(data, source_type="manual")
     )
     parts = []
-    if b24_ok: parts.append("\u2705 Bitrix24")
+    if b24_ok: parts.append("\u2705 CRM")
     if sheets_ok: parts.append("\u2705 Google Sheets")
     if parts:
         await message.answer(f"\u0417\u0431\u0435\u0440\u0435\u0436\u0435\u043d\u043e: {', '.join(parts)}", reply_markup=get_main_menu())
