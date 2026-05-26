@@ -73,18 +73,38 @@ async def save_to_sheets(contact: dict, source_type: str = "manual") -> bool:
         return False
 
 
+# Локальний лічильник — накопичується протягом сесії бота
+_local_counter_base = None  # завантажується один раз з Sheets
+_local_counter_increment = 0  # скільки натискань з моменту запуску
+
 async def get_and_increment_counter() -> int:
+    global _local_counter_base, _local_counter_increment
+
+    # Якщо база ще не завантажена — беремо з Sheets один раз
+    if _local_counter_base is None:
+        try:
+            async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
+                r = await client.get(SHEETS_WEBHOOK + "?action=counter")
+                data = r.json()
+                _local_counter_base = int(data.get("counter", 142))
+                logging.info(f"Counter loaded from Sheets: {_local_counter_base}")
+        except Exception as e:
+            logging.error(f"Counter load error: {e}")
+            _local_counter_base = 142  # стартова база якщо Sheets недоступний
+
+    # Завжди тільки додаємо — ніколи не зменшуємо
+    _local_counter_increment += random.randint(1, 3)
+    new_count = _local_counter_base + _local_counter_increment
+
+    # Зберігаємо в Sheets асинхронно (не блокуємо відповідь)
     try:
-        async with httpx.AsyncClient(timeout=8, follow_redirects=True) as client:
-            r = await client.get(SHEETS_WEBHOOK + "?action=counter")
-            data = r.json()
-            count = int(data.get("counter", 87))
-            new_count = count + random.randint(1, 4)
+        async with httpx.AsyncClient(timeout=5, follow_redirects=True) as client:
             await client.post(SHEETS_WEBHOOK, json={"action": "set_counter", "value": new_count})
-            return new_count
     except Exception as e:
-        logging.error(f"Counter error: {e}")
-        return random.randint(89, 165)
+        logging.error(f"Counter save error: {e}")
+        # Не скидаємо — продовжуємо рахувати локально
+
+    return new_count
 
 
 async def create_b24_deal(contact: dict, source_type: str = "manual") -> bool:
@@ -327,15 +347,9 @@ async def cmd_buy(event):
 
     pay_builder = InlineKeyboardBuilder()
     pay_builder.row(InlineKeyboardButton(
-        text="\U0001f4b3  \u041e\u041f\u041b\u0410\u0422\u0418\u0422\u0418 800 \u0433\u0440\u043d  \u2014  \u043e\u0442\u0440\u0438\u043c\u0430\u0442\u0438 \u043a\u043e\u0442\u0443\u0448\u043a\u0443  \u2192",
+        text="💳  ОПЛАТИТИ 800 грн  —  отримати котушку  →",
         url=PAY_URL
     ))
-
-    await message.answer(
-        "\U0001f4b3 *\u041d\u0430\u0442\u0438\u0441\u043d\u0456\u0442\u044c \u0449\u043e\u0431 \u043e\u043f\u043b\u0430\u0442\u0438\u0442\u0438 800 \u0433\u0440\u043d \u0456 \u043e\u0442\u0440\u0438\u043c\u0430\u0442\u0438 \u043a\u043e\u0442\u0443\u0448\u043a\u0443:*",
-        parse_mode="Markdown",
-        reply_markup=pay_builder.as_markup()
-    )
 
     await message.answer_photo(
         photo=f"{GITHUB_BASE_URL}qr_payment2.png",
@@ -346,7 +360,8 @@ async def cmd_buy(event):
             f"\u041f\u0456\u0441\u043b\u044f \u043e\u043f\u043b\u0430\u0442\u0438 \u2014 \u043d\u0430\u0434\u0456\u0448\u043b\u0456\u0442\u044c \u043a\u0432\u0438\u0442\u0430\u043d\u0446\u0456\u044e \u0432 \u0446\u0435\u0439 \u0447\u0430\u0442.\n\n"
             f"\U0001f4cd {STAND_INFO}\n\u2709\ufe0f {CONTACT_EMAIL}"
         ),
-        parse_mode="Markdown"
+        parse_mode="Markdown",
+        reply_markup=pay_builder.as_markup()
     )
     if isinstance(event, types.CallbackQuery): await event.answer()
 
