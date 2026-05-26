@@ -157,13 +157,37 @@ async def set_main_menu(bot: Bot):
 
 def get_main_menu():
     builder = InlineKeyboardBuilder()
-    builder.row(InlineKeyboardButton(text="\U0001f310 \u041d\u0430\u0448 \u0441\u0430\u0439\u0442", url=SITE_URL))
-    builder.row(InlineKeyboardButton(text="\U0001f6d2 \u041f\u0440\u0438\u0434\u0431\u0430\u0442\u0438 \u043a\u043e\u0442\u0443\u0448\u043a\u0443", callback_data="buy_filament"))
-    builder.row(InlineKeyboardButton(text="\U0001f4cd \u0414\u0435 \u043d\u0430\u0448 \u0441\u0442\u0435\u043d\u0434?", callback_data="find_us"))
-    builder.row(InlineKeyboardButton(text="\U0001f4f8 \u0413\u0430\u043b\u0435\u0440\u0435\u044f \u0440\u043e\u0431\u0456\u0442", callback_data="gallery"))
-    builder.row(InlineKeyboardButton(text="\U0001f4c7 \u0417\u0431\u0435\u0440\u0435\u0433\u0442\u0438 \u043a\u043e\u043d\u0442\u0430\u043a\u0442 DRUKAR", callback_data="get_vcard"))
-    builder.row(InlineKeyboardButton(text="\U0001f4f8 \u041d\u0430\u0434\u0456\u0441\u043b\u0430\u0442\u0438 \u0432\u0456\u0437\u0438\u0442\u043a\u0443 (AI)", callback_data="scan_card"))
-    builder.row(InlineKeyboardButton(text="\u270d\ufe0f \u0412\u0432\u0435\u0441\u0442\u0438 \u043a\u043e\u043d\u0442\u0430\u043a\u0442 \u0432\u0440\u0443\u0447\u043d\u0443", callback_data="manual_contact"))
+    # ── Головна дія — три кнопки підряд ──
+    builder.row(InlineKeyboardButton(
+        text="🔥🛒  КУПИТИ ТЕСТОВУ КОТУШКУ  —  800 грн  🔥",
+        callback_data="buy_filament"
+    ))
+    builder.row(InlineKeyboardButton(
+        text="🔥🛒  КУПИТИ ТЕСТОВУ КОТУШКУ  —  800 грн  🔥",
+        callback_data="buy_filament"
+    ))
+    builder.row(InlineKeyboardButton(
+        text="🔥🛒  КУПИТИ ТЕСТОВУ КОТУШКУ  —  800 грн  🔥",
+        callback_data="buy_filament"
+    ))
+    # ── Інформація про стенд ──
+    builder.row(InlineKeyboardButton(
+        text="📍 Де наш стенд?",
+        callback_data="find_us"
+    ))
+    # ── Другорядні опції — по дві в рядку ──
+    builder.row(
+        InlineKeyboardButton(text="🌐 Наш сайт", url=SITE_URL),
+        InlineKeyboardButton(text="📸 Галерея робіт", callback_data="gallery"),
+    )
+    builder.row(
+        InlineKeyboardButton(text="📇 Контакт DRUKAR", callback_data="get_vcard"),
+        InlineKeyboardButton(text="✍️ Ввести контакт", callback_data="manual_contact"),
+    )
+    builder.row(InlineKeyboardButton(
+        text="📸 Надіслати візитку (AI розпізнавання)",
+        callback_data="scan_card"
+    ))
     return builder.as_markup()
 
 
