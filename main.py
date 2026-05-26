@@ -34,7 +34,7 @@ CONTACT_EMAIL = "sales@drukar.com"
 STAND_INFO = "Стенд D-08, Павільйон 3, МВЦ, Київ"
 EXPO_NAME = "Addit EXPO 3D-2026"
 B24_SOURCE = "Telegram - DRUKAR_AdditExpo2026_bot"
-SITE_URL = "https://www.3drukar.com"
+SITE_URL = "https://www.3drukar.com/ua/home-%D1%83%D0%BA%D1%80%D0%B0%D1%97%D0%BD%D1%81%D1%8C%D0%BA%D0%B0/"
 
 
 class ManualVCard(StatesGroup):
